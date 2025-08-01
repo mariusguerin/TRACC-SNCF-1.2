@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Charger le fichier des données moyennes saisonnières
-df_saisons = pd.read_csv("data-EAU/moyennes_debit_saisonnieres_par_station.csv", sep=",")  # change le nom du fichier si nécessaire
+df_saisons = pd.read_csv("data-EAU\moyennes_debit_saisonnieres_1976_2005.csv", sep=",") 
 
 # Charger les métadonnées des stations
 df_meta = pd.read_csv("data-EAU/metadonneesHydrostations.csv", 
@@ -25,5 +25,5 @@ df_final = df_merged[[
 ]]
 
 # Export du fichier final
-df_final.to_csv("sation-debit-saison-scenario.csv", index=False, sep=";")
-print("✅ Fichier 'sation-debit-saison-scenario.csv' créé avec succès.")
+df_final.to_csv("sation-debit-saison-historique.csv", index=False, sep=";")
+print("✅ Ajout terminé")

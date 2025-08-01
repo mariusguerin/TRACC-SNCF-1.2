@@ -98,15 +98,31 @@
             <option value="RRq99refD_yr">Fréquence pluie remarquable (j)</option>
             <option value="IFM40_yr">Feux météo (j)</option>
             <option value="SWI04_yr">Humidité des sols (SWI04)</option>
-
-
-            <!-- Texte explicatif des indices-->
+            <option value="DebHyd">Débit hydrologique (m³/s)</option>
         </select>
-        <div id="explicationIndice" class="texte-explicatif"
-            style="margin-top: 10px; font-size: 0.9em; font-style: italic; color: #333;">
+
+        <div id="saisonContainer" style="display: none; margin-top: 10px;">
+            <label for="saisonSelect"><h3>Saison hydrologique :</h3></label>
+            <select id="saisonSelect" style="width: 100%;">
+                <option value="">Sélectionner</option>
+                <option value="Été">Été</option>
+                <option value="Automne">Automne</option>
+                <option value="Hiver">Hiver</option>
+                <option value="Printemps">Printemps</option>
+            </select>
         </div>
+
+
+        <!-- Texte explicatif des indices-->
+
+        <div id="explicationIndice" class="texte-explicatif"
+            style="margin-top: 10px; margin-bottom: 10px;font-size: 0.9em; font-style: italic; color: #333;">
+        </div>
+
+
+
         <!-- Texte explicatif du seuil-->
-        <h3 id="labelseuil">Seuil de risque </h3><span id="explication-seuil" class="texte-explicatif"
+        <h3 id="labelseuil">Seuil de risque </h3><span id="explication_seuil" class="texte-explicatif"
             style="margin-top: 0px; font-size: 0.9em; font-style: italic; color: #333;">Indiquez une valeur de seuil
             concernant l'indice sélectionné pour afficher les infrastructures que vous définissez à risque</span>
         <div id="seuilContainer">
@@ -310,7 +326,10 @@
                 "SWI04_yr": ["#f3eb6d", "#ff0000"],
 
                 // Inondation : GRIS
-                "ZonesInnondables": ["#413d46", "#413d46"]
+                "ZonesInnondables": ["#413d46", "#413d46"],
+
+                // Débit hydrologique : bleu ciel - violet
+                "DebHyd": ["#deebf7", "#6a51a3"]
             };
 
             return palettes[indice] || legend.update(); // par défaut on supprime la légende si l'indice n'est pas supporté (si c'est l'indice 'selectionner') 
@@ -327,7 +346,9 @@
                 "RRq99_yr": [15.72, 112.57],
                 "RRq99refD_yr": [2.2, 8.6],
                 "IFM40_yr": [0, 82],
-                "SWI04_yr": [0, 287], // Valeurs fictives pour l'humidité des sols, à vérifier
+                "SWI04_yr": [0, 287],
+                "DebHyd": [0, 1000] // Valeurs arbitraires , a verifier
+
             };
 
             return bornes[indice] || [0, 1]; // Valeurs par défaut si indice inconnu
@@ -347,7 +368,8 @@
                 "RRq99_yr": "Cumul de précipitations remarquables (percentile 99 du cumul  quotidien) (mm)",
                 "RRq99refD_yr": "Nombre de jours où les précipitations quotidiennes dépassent le 99e centile des précipitations quotidiennes de l'année.",
                 "IFM40_yr": "Nombre de jours où l'indicateur feux météo est supérieur à 40 (favorable à des départs de feu)",
-                "SWI04_yr": "(Soil Wetness Index) Nombre de jours où SWI < 0.4, considéré comme sec", 
+                "SWI04_yr": "(Soil Wetness Index) Nombre de jours où SWI < 0.4, considéré comme sec",
+                "DebHyd": "Moyenne sur 30ans des moyennes par saison des débit hydrologique des stations de mesure (m³/s)"
             };
             const texte = explications[indice] || "";
             document.getElementById("explicationIndice").textContent = texte;
@@ -414,7 +436,7 @@
                     if (id_indice == "ZonesInnondables") {
                         legend.update()
                     }
-                    
+
                     newLayer.addTo(carte);
                     scenarioLayerGroup = newLayer;
                 })
@@ -541,6 +563,65 @@
                 });
         }
 
+        // fonction qui sert à afficher les débits hydrauliques 
+        function afficherDebitHydro(fichierGeojson, saison, periode) {
+            if (scenarioLayerGroup) {
+                carte.removeLayer(scenarioLayerGroup);
+            }
+
+            fetch(fichierGeojson)
+                .then(response => response.json())
+                .then(data => {
+                    const features = data.features.filter(f =>
+                        f.properties.Periode === periode &&
+                        f.properties[saison] !== undefined
+                    );
+
+                    // Calcul min/max dynamique
+                    const valeurs = features.map(f => f.properties[saison]);
+                    const minVal = Math.min(...valeurs);
+                    const maxVal = Math.max(...valeurs);
+                    // Affichage console
+                    console.log(`Indice : ${"DebHyd"}`);
+                    console.log(`→ Valeur min : ${minVal}`);
+                    console.log(`→ Valeur max : ${maxVal}`);
+
+                    const newLayer = L.layerGroup();
+
+                    const [couleur_min, couleur_max] = getColorPaletteForIndice("DebHyd");
+
+                    features.forEach(f => {
+                        const val = f.properties[saison];
+                        const color = getColor(val, minVal, maxVal, couleur_min, couleur_max);
+
+                        const cercle = L.circleMarker([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
+                            radius: 6,
+                            fillColor: color,
+                            color: "#333",
+                            weight: 1,
+                            fillOpacity: 0.8,
+                            pane: 'scenarioPane'
+                        });
+
+                        cercle.bindPopup(`<strong>${f.properties.nom_station}</strong><br>${saison} : ${val.toFixed(2)} m³/s`);
+                        cercle.addTo(newLayer);
+                    });
+
+                    newLayer.addTo(carte);
+                    scenarioLayerGroup = newLayer;
+
+                    // Met à jour la légende
+                    legend.update({
+                        id_indice: "DebHyd",
+                        min: minVal,
+                        max: maxVal,
+                        colorMin: couleur_min,
+                        colorMax: couleur_max
+                    });
+                })
+                .catch(err => console.error("Erreur affichage débit hydro :", err));
+        }
+
         // Cette fonction zoneARisque stocke les points à risque concernant un indice, d'une année, d'un fichier geojson, au dessus d'un seuil précisé
         async function zoneARisque(fichierGeojson, annee, indice, seuil) {
             try {
@@ -663,7 +744,7 @@
                         if (feature.properties) {
                             const nom = feature.properties.libelle || 'Non nommé, id réseau :' + feature.properties.idreseau;
                             layer.bindPopup(`<strong>${nom}</strong>`);
-                            
+
                         }
                     }
                 }).addTo(carte);
@@ -679,9 +760,9 @@
                 const indiceTexte = indiceSelect.options[indiceSelect.selectedIndex].text;
                 const seuil1 = parseFloat(document.getElementById("seuilValue").value);
 
-                if (indiceSelect.value != "ZonesInnondables"){
+                if (indiceSelect.value != "ZonesInnondables") {
                     document.getElementById("nombreOuvrages").textContent =
-                        libellesUniques.size + ' ' + infra_nom + ' dont l’indice ' + indiceTexte + ' est supérieur à ' + seuil1 + ' :';                    
+                        libellesUniques.size + ' ' + infra_nom + ' dont l’indice ' + indiceTexte + ' est supérieur à ' + seuil1 + ' :';
                 }
                 else {
                     document.getElementById("nombreOuvrages").textContent =
@@ -754,7 +835,25 @@
                 afficherExplicationIndice(indice); // Affiche l’explication
                 const seuil = parseFloat(document.getElementById("seuilValue").value);
                 if (scenario_info && selectedIndice != "") {
-                    afficherScenario(scenario_info.fichier, scenario_info.annee, selectedIndice);
+                    if (selectedIndice == "DebHyd") {
+                        const scenario = document.querySelector('input[name="scenario"]:checked');
+                        const periode = scenario.value;
+                        const saison = document.getElementById("saisonSelect").value;
+                        if (saison == "") {
+                            document.getElementById("explicationIndice").textContent = "Veuillez sélectionner une saison pour afficher les débits hydrologiques";
+                            document.getElementById("explicationIndice").style.color = "red";
+                            return;
+                        }
+                        else {
+                            afficherDebitHydro("data-EAU/station-debit-saison-scenario.geojson", saison, periode);
+                            console.log("Débit hydro affichés : "+saison + " - " + periode);
+                            afficherExplicationIndice("DebHyd");
+                        }
+
+                    }
+                    else {
+                        afficherScenario(scenario_info.fichier, scenario_info.annee, selectedIndice);
+                    }
                     if (selectedIndice && infra && seuil != 0) {
                         chargerInfraARisque(infra_info.fichier, scenario_info.fichier, scenario_info.annee, indice, seuil);
                     }
@@ -770,40 +869,76 @@
 
         // Affiche le scénario en fonction de l'indice sélectionné, (affiche le détail/explication de l'indice)
         document.getElementById("indiceSelect").addEventListener("change", () => {
+            // Réaffiche les infos du seuil 
+            seuilContainer.style.display = "block"; 
+            labelseuil.style.display = "block";
+            explication_seuil.style.display = "block";
+
             const indice = document.getElementById("indiceSelect").value;
+            saisonContainer.style.display = "none"; // supprime la sélection des saisons
             afficherExplicationIndice(indice); // Affiche l’explication
             if (indice == "ZonesInnondables") {
                 legend.update();
                 document.querySelectorAll('#SelectionScenarios input[type="radio"]').forEach(cb => cb.checked = false);
                 if (scenarioLayerGroup) carte.removeLayer(scenarioLayerGroup);
                 afficherInondation("data-METEO/n_tri_s.geojson")
-                document.getElementById("explication-seuil").textContent = "Les territoires à risque d'inondation ne nécessitent pas de seuil, sélectionnez une infrastructure puis cliquez Afficher pour voir les infrastructures à risque";
+                document.getElementById("explication_seuil").textContent = "Les territoires à risque d'inondation ne nécessitent pas de seuil, sélectionnez une infrastructure puis cliquez Afficher pour voir les infrastructures à risque";
                 const infra_info = getSelectedInfraInfo(); // Récupère infrastructure
                 const scenario_info = getSelectedScenarioInfo();
                 chargerInfraARisque(infra_info.fichier, scenario_info.fichier, scenario_info.annee, indice, 0)
 
             }
-            else {
-                document.getElementById("explication-seuil").textContent = "Indiquez une valeur de seuil concernant l'indice sélectionné pour afficher les infrastructures que vous définissez à risque";
+            if (indice == "DebHyd") {
+                saisonContainer.style.display = "block"; // Affiche le sélecteur
+                // Demnde la sélection de la saison
+                document.getElementById("explicationIndice").textContent = "Veuillez sélectionner une saison pour afficher les débits hydrologiques";
+                document.getElementById("explicationIndice").style.color = "red";                
+                // Suprrime les info de seuil 
+                seuilContainer.style.display = "none"; 
+                labelseuil.style.display = "none";
+                explication_seuil.style.display = "none";
+
+                document.getElementById("saisonSelect").selectedIndex = 0;
+
+                legend.update();
+                if (scenarioLayerGroup) carte.removeLayer(scenarioLayerGroup);
+                const scenario = document.querySelector('input[name="scenario"]:checked');
+                if (!scenario) return "";
+                const periode = scenario.value;
+                const saison = document.getElementById("saisonSelect").value;
+                if (saison == "") {
+                    document.getElementById("explicationIndice").textContent = "Veuillez sélectionner une saison pour afficher les débits hydrologiques";
+                    document.getElementById("explicationIndice").style.color = "red";
+                    return;
+                }
+                else {
+                    afficherDebitHydro("data-EAU/station-debit-saison-scenario.geojson", saison, periode);
+                    console.log("Débit hydro affichés : "+saison + " - " + periode);
+                    afficherExplicationIndice("DebHyd");
+                }
+
+                // const scenario_info = getSelectedScenarioInfo(); ne sert à rien ?
+            } else {
+                document.getElementById("explication_seuil").textContent = "Indiquez une valeur de seuil concernant l'indice sélectionné pour afficher les infrastructures que vous définissez à risque";
                 const info = getSelectedScenarioInfo();
                 if (inondLayer) carte.removeLayer(inondLayer);
                 if (!info) {
                     // console.log("Aucun scénario sélectionné");
-                    if (indice!="") {
+                    if (indice != "") {
                         console.log(indice);
                         document.getElementById("explicationIndice").textContent = "Veuillez sélectionner un scénario climatique";
-                    document.getElementById("explicationIndice").style.color = "red";
+                        document.getElementById("explicationIndice").style.color = "red";
                     }
-                    else{
+                    else {
                         document.getElementById("explicationIndice").textContent = "Veuillez sélectionner un indice";
-                    document.getElementById("explicationIndice").style.color = "red";
+                        document.getElementById("explicationIndice").style.color = "red";
                     }
                 };
-                if (indice=="") {
-                        document.getElementById("explicationIndice").textContent = "Veuillez sélectionner un indice";
+                if (indice == "") {
+                    document.getElementById("explicationIndice").textContent = "Veuillez sélectionner un indice";
                     document.getElementById("explicationIndice").style.color = "red";
                 }
-                
+
                 afficherScenario(info.fichier, info.annee, indice);
                 document.getElementById("nombreOuvrages").textContent = '';
                 document.getElementById("listeOuvrages").innerHTML = "";
@@ -813,6 +948,31 @@
                 if (infraLayer) {
                     carte.removeLayer(infraLayer);
                     infraLayer = null;
+                }
+            }
+        });
+
+        // affiche au changement de sélection des saisons les débits hydrologiques
+        document.getElementById("saisonSelect").addEventListener("change", () => {
+            const scenario = document.querySelector('input[name="scenario"]:checked');
+            const saison = document.getElementById("saisonSelect").value;
+            if (saison == "") {
+                document.getElementById("explicationIndice").textContent = "Veuillez sélectionner une saison pour afficher les débits hydrologiques";
+                document.getElementById("explicationIndice").style.color = "red";
+                return;
+            }
+            else {
+                if(scenario == null) {
+                    document.getElementById("explicationIndice").textContent = "Veuillez sélectionner un scénario climatique";
+                    document.getElementById("explicationIndice").style.color = "red";
+                    return;
+                }
+                else {
+                    afficherExplicationIndice("DebHyd");
+                    const periode = scenario.value;
+                    afficherDebitHydro("data-EAU/station-debit-saison-scenario.geojson", saison, periode);
+                    console.log("Débit hydro affichés : " + saison + " - " + periode);
+                    afficherExplicationIndice("DebHyd");
                 }
             }
         });
@@ -891,17 +1051,29 @@
             legend.update();
             document.getElementById("nombreOuvrages").textContent = '';
             document.getElementById("listeOuvrages").innerHTML = "";
+            document.getElementById("explicationIndice").innerHTML = "";
             document.querySelectorAll('#SelectionReseau input[type="checkbox"]').forEach(cb => cb.checked = false);
             document.querySelectorAll('#SelectionScenarios input[type="radio"]').forEach(cb => cb.checked = false);
             document.getElementById("infraSelect").selectedIndex = 0;
             document.getElementById("indiceSelect").selectedIndex = 0;
+            document.getElementById("saisonSelect").selectedIndex = 0;
+
+            //Supprime la sélection de sainson
+            saisonContainer.style.display = "none"; // Affiche le sélecteur
+            // Réaffiche les infos du seuil si supprimés
+            seuilContainer.style.display = "block";
+            labelseuil.style.display = "block";
+            explication_seuil.style.display = "block";
         }
+
+        // Gère le bouton de nettoyage de la carte
         document.getElementById("clearcarte").addEventListener("click", nettoyerCarte);
 
         // Gère le bouton de la fenetre d'intro
         document.getElementById("closeModalBtn").addEventListener("click", () => {
             document.getElementById("modalIntro").style.display = "none";
         });
+
         // Gère le bouton d'information sur le header
         document.getElementById("infoBtn").addEventListener("click", () => {
             document.getElementById("modalIntro").style.display = "flex";
@@ -912,4 +1084,4 @@
 
 </html>
 <!DOCTYPE html>
-<html lang="fr">   
+<html lang="fr">

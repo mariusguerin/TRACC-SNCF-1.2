@@ -1,8 +1,68 @@
+## POUR LES PERIODES 2030 2050 2070 2100
+# import pandas as pd
+# from datetime import datetime
+
+#
+# fichier = "C:/Users/marguerin/OneDrive - Sopra Steria/Documents/GitHub/DRIAS-eau/debitRCP45formatpretraitement.txt"
+
+# # Chargement du fichier (en ignorant les lignes de commentaire commençant par "#")
+# df = pd.read_csv(fichier, 
+#                  delim_whitespace=True, 
+#                  comment="#", 
+#                  header=None, 
+#                  names=["Date", "CodeHydro", "IdStation", "Debit"])
+
+# # Conversion de la date en format datetime
+# df["Date"] = pd.to_datetime(df["Date"], format="%Y%m%d")
+
+# # Ajout des colonnes utiles : année et saison
+# df["Annee"] = df["Date"].dt.year
+# df["Mois"] = df["Date"].dt.month
+
+# # Attribution des saisons
+# def get_saison(mois):
+#     if mois in [12, 1, 2]:
+#         return "Hiver"
+#     elif mois in [3, 4, 5]:
+#         return "Printemps"
+#     elif mois in [6, 7, 8]:
+#         return "Été"
+#     elif mois in [9, 10, 11]:
+#         return "Automne"
+
+# df["Saison"] = df["Mois"].apply(get_saison)
+
+# # Attribution des périodes
+# def get_periode(annee):
+#     if 2005 <= annee < 2030:
+#         return "2005-2030"
+#     elif 2030 <= annee < 2050:
+#         return "2030-2050"
+#     elif 2070 <= annee <= 2100:
+#         return "2070-2100"
+#     else:
+#         return None
+
+# df["Periode"] = df["Annee"].apply(get_periode)
+# df = df.dropna(subset=["Periode"])  # Enlever les lignes hors périodes cibles
+
+# # Agrégation : moyenne du débit par station, période et saison
+# resultat = df.groupby(["CodeHydro", "Periode", "Saison"])["Debit"].mean().reset_index()
+
+# # Reshape : 1 ligne par station et période, avec colonnes pour chaque saison
+# resultat_pivot = resultat.pivot_table(index=["CodeHydro", "Periode"], 
+#                                       columns="Saison", 
+#                                       values="Debit").reset_index()
+
+# # Export
+# resultat_pivot.to_csv("moyennes_debit_saisonnieres_par_station.csv", index=False)
+# print("✅ Fichier exporté : moyennes_debit_saisonnieres_par_station.csv")
+
+# POUR LA PERIODE HISTORIQUE 
 import pandas as pd
 from datetime import datetime
 
-# 📂 À personnaliser avec le bon chemin de fichier
-fichier = "C:/Users/marguerin/OneDrive - Sopra Steria/Documents/GitHub/DRIAS-eau/debitRCP45formatpretraitement.txt"
+fichier = "C:/Users/marguerin/OneDrive - Sopra Steria/Documents/GitHub/DRIAS-eau/debitRCP45historiqueformatpretraitement.txt"
 
 # Chargement du fichier (en ignorant les lignes de commentaire commençant par "#")
 df = pd.read_csv(fichier, 
@@ -11,14 +71,15 @@ df = pd.read_csv(fichier,
                  header=None, 
                  names=["Date", "CodeHydro", "IdStation", "Debit"])
 
-# Conversion de la date en format datetime
+# Conversion de la date
 df["Date"] = pd.to_datetime(df["Date"], format="%Y%m%d")
-
-# Ajout des colonnes utiles : année et saison
 df["Annee"] = df["Date"].dt.year
 df["Mois"] = df["Date"].dt.month
 
-# Attribution des saisons
+# Filtrer uniquement les années 1976 à 2005
+df = df[(df["Annee"] >= 1976) & (df["Annee"] <= 2005)]
+
+# Fonction pour attribuer les saisons
 def get_saison(mois):
     if mois in [12, 1, 2]:
         return "Hiver"
@@ -31,28 +92,17 @@ def get_saison(mois):
 
 df["Saison"] = df["Mois"].apply(get_saison)
 
-# Attribution des périodes
-def get_periode(annee):
-    if 2005 <= annee < 2030:
-        return "2005-2030"
-    elif 2030 <= annee < 2050:
-        return "2030-2050"
-    elif 2070 <= annee <= 2100:
-        return "2070-2100"
-    else:
-        return None
+# Ajouter une colonne période fixe
+df["Periode"] = "1976-2005"
 
-df["Periode"] = df["Annee"].apply(get_periode)
-df = df.dropna(subset=["Periode"])  # Enlever les lignes hors périodes cibles
-
-# Agrégation : moyenne du débit par station, période et saison
+# Agrégation : moyenne par CodeHydro, Période et Saison
 resultat = df.groupby(["CodeHydro", "Periode", "Saison"])["Debit"].mean().reset_index()
 
-# Reshape : 1 ligne par station et période, avec colonnes pour chaque saison
+# Pivot : 1 ligne par station avec colonnes Automne, Hiver, Printemps, Été
 resultat_pivot = resultat.pivot_table(index=["CodeHydro", "Periode"], 
                                       columns="Saison", 
                                       values="Debit").reset_index()
 
 # Export
-resultat_pivot.to_csv("moyennes_debit_saisonnieres_par_station.csv", index=False)
-print("✅ Fichier exporté : moyennes_debit_saisonnieres_par_station.csv")
+resultat_pivot.to_csv("moyennes_debit_saisonnieres_1976_2005.csv", index=False)
+print("✅ Export terminé : moyennes_debit_saisonnieres_1976_2005.csv")
